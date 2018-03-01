@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IOTA-C0 Processor</title>
+    <style>
+    </style>
+    <script src="IOTA_C0.class.js"></script>
+    <script src="IOTA_C0_comp.class.js"></script>
+    <script>
+    var IOTA=new IOTA_C0([]);
+    var run;
+    var runInfobox=setInterval(function(){
+      let box=document.getElementById("infobox");
+      box.innerHTML="";
+      
+      let ul=document.createElement("ul");
+      for(i of info)
+      {
+        let li=document.createElement("li");
+        li.innerHTML=i.name+": "+IOTA.mem[i.value];
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+    }, 100);
+    window.info=[];
+    
+    var programs={
+      "Choose an example program":"",
+      "Fill": `#uses only draft 1
+SET  0x0200  0x0F0F
+ADR  0x0108
+MOV  0x01FF *0x0046
+INC *0x0001  0x0001
+QJP  0x01FF`,
+      "Fibonacci": `#uses only draft 2, which added more instructions
+#initial state
+MOV 0x200 1
+MOV 0x201 1
+#locations of the most recent numbers
+ADR 0x200 0x1FE
+ADR 0x201 0x1FF
+#location of the next number
+STA 0x202
+#start the loop
+LBL 0x1FB
+  #add the two numbers together
+  GET 0x1FE 0x1FC
+  GET 0x1FF 0x1FD
+  ADD *0x1FC *0x1FD
+  #write the sum to the referenced address
+  STV *0x33
+  #increment the pointers
+  INC *0x1FE 0x1FE
+  INC *0x1FF 0x1FF
+  #the address of DFA
+  INC *0x1 0x1
+  #jump to the start of the loop
+QJP 0x1FB`,
+      "Factorial": `#uses draft 3, which added pre and post processor
+JMP &start_program
+
+.var results[8]
+
+.var n
+.var tot
+.lbl fact
+  #init factorial
+  MOV :tot 1
+  
+  #start the body of the function
+  .lbl fact_body
+  
+  #check if n is at or below 1
+  .var fact_reached_1
+  LOE :n 1 :fact_reached_1
+  
+  #if it is, exit the function
+  .var fact_jump_loc
+  TNA :fact_reached_1 &fact_ret &fact_mult :fact_jump_loc
+  QJP :fact_jump_loc
+  
+  #otherwise, tot=tot*(n--)
+  .lbl fact_mult
+  MUL :n :tot :tot
+  DEC :n :n
+  
+  #recursion!
+  CAL &fact_body
+
+  #the exit
+  .lbl fact_ret
+  RET  
+  
+.lbl start_program
+#for i=1
+.var i
+MOV :i 1
+.var for_loop
+LBL :for_loop
+  #i<=8
+  .var end_of_array
+  LOE :i 8 :end_of_array
+  .var for_jump
+  TNA :end_of_array &continue_for &exit_for :for_jump
+  QJP :for_jump
+  
+  .lbl continue_for
+  #get i factorial into tot
+  MOV :n :i
+  CAL &fact
+  
+  #put it into results
+  .var addr
+  ADD :results :i :addr
+  DEC :addr :addr
+  ADR :addr :addr
+  SET :addr :tot
+  
+  #i++
+  INC :i :i
+QJP :for_loop
+.lbl exit_for
+
+.lbl exit_program
+JMP &exit_program`
+    }
+    function loadProgram()
+    {
+      let read=document.getElementById("machine_code").value;
+      let iota=IOTA_C0_comp.load(read);
+      
+      IOTA=iota;
+    }
+    function compileProgram()
+    {
+      let read=document.getElementById("program").value;
+      let hex=IOTA_C0_comp.compile(read);
+      
+      document.getElementById("machine_code").value=hex;
+    }
+    function onLoad()
+    {
+      run=setInterval(function(){
+        document.getElementById("RAM").innerHTML="";
+        document.getElementById("RAM").appendChild(IOTA.RAMImage);
+        IOTA.step();
+      }, 100);
+      
+      let keys=Object.keys(programs);
+      for(k in programs)
+      {
+        let op=document.createElement("option");
+        op.value=programs[k];
+        op.innerHTML=k;
+        document.getElementById("preset").appendChild(op);
+      }
+    }
+    </script>
+  </head>
+  <body onload="onLoad()">
+    <div id="RAM" style="display: inline-block; vertical-align: top; margin-right: 2em">
+    
+    </div>
+    <div style="display: inline-block; vertical-align: top;">
+      <select id="preset" onchange="document.getElementById('program').value=this.value">
+        
+      </select>
+      <br/>
+      <textarea id="program" rows="10" cols="40"></textarea>
+      <br/>
+      <button onclick="compileProgram()">COMPILE</button>
+      <br/>
+      <textarea id="machine_code" rows="10" cols="40"></textarea>
+      <br/>
+      <button onclick="loadProgram()">RUN</button>
+    </div>
+    <div id="infobox" style="display: inline-block; vertical-align: top;">
+    
+    </div>
+  </body>
+</html>

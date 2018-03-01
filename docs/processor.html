@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IOTA-C0 Processor Documentation</title>
+    <link rel="stylesheet" type="text/css" href="assets/style.css">
+    <link rel="icon" href="assets/icon.ico">
+  </head>
+  <body>
+    <h1 id="title">IOTA-C0 Processor Documentation</h1>
+    <h2 id="memory">Memory</h2>
+    <h3 id="basics">Basics</h3>
+    <p>RAM: 65536 16-bit addresses, from 0x0000 to 0xFFFF</p>
+    <p>Registers: 2 16-bit registers for holding data read from RAM</p>
+    <h3 id="layoutOfRAM">Layout of RAM</h3>
+    <table>
+      <tr>
+        <th>Section name</th>
+        <th>Start address</th>
+        <th>End address</th>
+        <th>Read only?</th>
+        <th>Description</th>
+        <th>Default value</th>
+      </tr>
+      <tr>
+        <td>Literals</td>
+        <td>0x0000</td>
+        <td>0x7FFF</td>
+        <td>YES</td>
+        <td>
+          Because the IOTA-C0 can only work with pointers,
+          these memory addresses hold literals,
+          so that programs can actually use literals.
+        </td>
+        <td>Their address in memory</td>
+      </tr>
+      <tr>
+        <td>Computation RAM</td>
+        <td>0x8000</td>
+        <td>0x807F</td>
+        <td colspan="3">
+          <a href="#cram">See Computational RAM</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Stack A</td>
+        <td>0x8080</td>
+        <td>0x80BF</td>
+        <td>YES</td>
+        <td>
+          Values are filled from low end to high end.
+          If all 64 are filled and a value is pushed, nothing happens
+          If there are no values in the stack when a value is popped, returns 0x0000 and makes no change
+        </td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>Stack B</td>
+        <td>0x80C0</td>
+        <td>0x80FF</td>
+        <td>YES</td>
+        <td>
+          Values are filled from low end to high end.
+          If all 64 are filled and a value is pushed, nothing happens
+          If there are no values in the stack when a value is popped, returns 0x0000 and makes no change
+        </td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>Standard RAM</td>
+        <td>0x8100</td>
+        <td>0xFFFF</td>
+        <td>NO</td>
+        <td>Low end reserved for program; all rest is for the program's variables</td>
+        <td>0</td>
+      </tr>
+    </table>
+    
+    <h2 id="clockCycle">Clock Cycle</h2>
+    <p>The following procedure is run every clock cycle</p>
+    <ol>
+      <li>Copy the value in memory address 0x8000 into register 0</li>
+      <li>Copy the value in the memory address pointed to by the value in register 0 into register 0</li>
+      <li>Increment the value in memory address 0x8000</li>
+      <li>Copy the value in memory address 0x8000 into register 1</li>
+      <li>Copy the value in the memory address pointed to by the value in register 1 into register 1</li>
+      <li>Increment the value in memory address 0x8000</li>
+      <li>Copy the value in the memory address pointed to by the value in register 1 into the memory address pointed to by the value in register 0</li>
+    </ol>
+    <p>Or, in less verbose terms:</p>
+    <ol>
+      <li>R[0]=M[0x8000]</li>
+      <li>R[0]=M[R[0]]</li>
+      <li>M[0x8000]++</li>
+      <li>R[1]=M[0x8000]</li>
+      <li>R[1]=M[R[1]]</li>
+      <li>M[0x8000]++</li>
+      <li>M[R[0]]=M[R[1]]</li>
+    </ol>
+    
+    <h2 id="cram">Computational RAM</h2>
+    <p>
+      Computation RAM is how the IOTA-C0 performs all its computation.
+      The values in this area (0x8000-0x807F) change between clock
+      cycles based on nearby values, following the rules detailed in the table below. 
+    </p>
+    <p>
+      A hex number is a literal.<br/>
+      A hex number in brackets is a value pointed to by the number. (a pointer)<br/>
+      A hex number in double brackets is a value pointed to by the number at the address pointed to by the number. (a pointer pointer)
+    </p>
+    <table>
+      <tr>
+        <th>Address</th>
+        <th>Read only?</th>
+        <th>Operation</th>
+      </tr>
+      <tr>
+        <td>0x8000</td>
+        <td>NO</td>
+        <td>Instruction pointer<br/>Default value: 0x8100</td>
+      </tr>
+      <tr>
+        <td>0x8001</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000<br/>Default value: 0x807F</td>
+      </tr>
+      <tr>
+        <td>0x8002</td>
+        <td>NO</td>
+        <td>The value here gets written to [[0x8001]] </td>
+      </tr>
+      <tr>
+        <td>0x8003</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8004</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8005</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8006</td>
+        <td>YES</td>
+        <td>Value becomes [0x8004] if [0x8003] is not 0x0000;<br/>Value becomes [0x8005] id [0x8003] is 0x0000</td>
+      </tr>
+      <tr>
+        <td>0x8007</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8008</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8009</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800A</td>
+        <td>YES</td>
+        <td>Value becomes [0x8008] if [0x8007] is not 0x0000;<br/>Value becomes [0x8009] id [0x8007] is 0x0000</td>
+      </tr>
+      <tr>
+        <td>0x800B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800D</td>
+        <td>YES</td>
+        <td>Value becomes [0x800B]&[0x800C]</td>
+      </tr>
+      <tr>
+        <td>0x800E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8010</td>
+        <td>YES</td>
+        <td>Value becomes [0x800E]|[0x800F]</td>
+      </tr>
+      <tr>
+        <td>0x8011</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8012</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8013</td>
+        <td>YES</td>
+        <td>Value becomes [0x8011]XOR[0x8012]</td>
+      </tr>
+      <tr>
+        <td>0x8014</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8015</td>
+        <td>YES</td>
+        <td>Value becomes ~[0x8014]</td>
+      </tr>
+      <tr>
+        <td>0x8016</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8017</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8018</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8016]&lt;[0x8017];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8019</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801A</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801B</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8019]&lt;=[0x801A];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x801C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801E</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x801C]>[0x801D];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x801F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8020</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8021</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x801F]>=[0x8020];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8022</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8001</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000<br/>Default value: 0x807F</td>
+      </tr>
+      <tr>
+        <td>0x8002</td>
+        <td>NO</td>
+        <td>The value here gets written to [[0x8001]] </td>
+      </tr>
+      <tr>
+        <td>0x8003</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8004</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8005</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8006</td>
+        <td>YES</td>
+        <td>Value becomes [0x8004] if [0x8003] is not 0x0000;<br/>Value becomes [0x8005] id [0x8003] is 0x0000</td>
+      </tr>
+      <tr>
+        <td>0x8007</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8008</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8009</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800A</td>
+        <td>YES</td>
+        <td>Value becomes [0x8008] if [0x8007] is not 0x0000;<br/>Value becomes [0x8009] id [0x8007] is 0x0000</td>
+      </tr>
+      <tr>
+        <td>0x800B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800D</td>
+        <td>YES</td>
+        <td>Value becomes [0x800B]&[0x800C]</td>
+      </tr>
+      <tr>
+        <td>0x800E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x800F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8010</td>
+        <td>YES</td>
+        <td>Value becomes [0x800E]|[0x800F]</td>
+      </tr>
+      <tr>
+        <td>0x8011</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8012</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8013</td>
+        <td>YES</td>
+        <td>Value becomes [0x8011]XOR[0x8012]</td>
+      </tr>
+      <tr>
+        <td>0x8014</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8015</td>
+        <td>YES</td>
+        <td>Value becomes ~[0x8014]</td>
+      </tr>
+      <tr>
+        <td>0x8016</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8017</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8018</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8016]&lt;[0x8017];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8019</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801A</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801B</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8019]&lt;=[0x801A];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x801C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x801E</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x801C]>[0x801D];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x801F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8020</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8021</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x801F]>=[0x8020];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8022</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8023</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8024</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8022]==[0x8023];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8025</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8026</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8027</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8025]!=[0x8026];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8028</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8029</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802A</td>
+        <td>YES</td>
+        <td>Value becomes [0x8028]>>>[0x8029]</td>
+      </tr>
+      <tr>
+        <td>0x802B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802D</td>
+        <td>YES</td>
+        <td>Value becomes [0x802B]>>[0x802C]</td>
+      </tr>
+      <tr>
+        <td>0x802E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8030</td>
+        <td>YES</td>
+        <td>Value becomes [0x802E]&lt;&lt;[0x802F]</td>
+      </tr>
+      <tr>
+        <td>0x8031</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8032</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8033</td>
+        <td>YES</td>
+        <td>Value becomes [0x8031]+[0x8032]</td>
+      </tr>
+      <tr>
+        <td>0x8034</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8035</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8036</td>
+        <td>YES</td>
+        <td>Value becomes [0x8034]-[0x8035]</td>
+      </tr>
+      <tr>
+        <td>0x8037</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8038</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8039</td>
+        <td>YES</td>
+        <td>Value becomes [0x8037]*[0x8038]</td>
+      </tr>
+      <tr>
+        <td>0x803A</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803C</td>
+        <td>YES</td>
+        <td>Value becomes [0x803A]/[0x803B]<br/>Division by 0 results in 0</td>
+      </tr>
+      <tr>
+        <td>0x803D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803F</td>
+        <td>YES</td>
+        <td>Value becomes [0x803D]%[0x803E]<br/>Division by 0 results in 0</td>
+      </tr>
+      <tr>
+        <td>0x8040</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8041</td>
+        <td>YES</td>
+        <td>Value becomes [0x8040]+1</td>
+      </tr>
+      <tr>
+        <td>0x8042</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8043</td>
+        <td>YES</td>
+        <td>Value becomes [0x8042]-1</td>
+      </tr>
+      <tr>
+        <td>0x8044</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8045</td>
+        <td>YES</td>
+        <td>Value becomes [0x8044]*-1</td>
+      </tr>
+      <tr>
+        <td>0x8046</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8047</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8048</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x8047] is pushed to stack A</td>
+      </tr>
+      <tr>
+        <td>0x8049</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804A</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x8049] becomes the value popped off stack A</td>
+      </tr>
+      <tr>
+        <td>0x804B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804C</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x804B]|0x8000 is pushed to stack B</td>
+      </tr>
+      <tr>
+        <td>0x804D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804E</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x804D] becomes the value popped off stack B</td>
+      </tr>
+      <tr>
+        <td>0x804F</td>
+        <td>YES</td>
+        <td>Returns a random value when read</td>
+      </tr>
+      <tr>
+        <td>0x8050</td>
+        <td>YES</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8051</td>
+        <td>YES</td>
+        <td>Value becomes the value in [[0x8050]]</td>
+      </tr>
+      <tr>
+        <td>0x807F</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here, all writable memory is set to 0<br/>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8024</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8022]==[0x8023];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8025</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8026</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8027</td>
+        <td>YES</td>
+        <td>Value becomes 0xFFFF if [0x8025]!=[0x8026];<br/>Value becomes 0x0000 otherwise</td>
+      </tr>
+      <tr>
+        <td>0x8028</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8029</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802A</td>
+        <td>YES</td>
+        <td>Value becomes [0x8028]>>>[0x8029]</td>
+      </tr>
+      <tr>
+        <td>0x802B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802C</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802D</td>
+        <td>YES</td>
+        <td>Value becomes [0x802B]>>[0x802C]</td>
+      </tr>
+      <tr>
+        <td>0x802E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x802F</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8030</td>
+        <td>YES</td>
+        <td>Value becomes [0x802E]&lt;&lt;[0x802F]</td>
+      </tr>
+      <tr>
+        <td>0x8031</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8032</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8033</td>
+        <td>YES</td>
+        <td>Value becomes [0x8031]+[0x8032]</td>
+      </tr>
+      <tr>
+        <td>0x8034</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8035</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8036</td>
+        <td>YES</td>
+        <td>Value becomes [0x8034]-[0x8035]</td>
+      </tr>
+      <tr>
+        <td>0x8037</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8038</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8039</td>
+        <td>YES</td>
+        <td>Value becomes [0x8037]*[0x8038]</td>
+      </tr>
+      <tr>
+        <td>0x803A</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803C</td>
+        <td>YES</td>
+        <td>Value becomes [0x803A]/[0x803B]<br/>Division by 0 results in 0</td>
+      </tr>
+      <tr>
+        <td>0x803D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803E</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x803F</td>
+        <td>YES</td>
+        <td>Value becomes [0x803D]%[0x803E]<br/>Division by 0 results in 0</td>
+      </tr>
+      <tr>
+        <td>0x8040</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8041</td>
+        <td>YES</td>
+        <td>Value becomes [0x8040]+1</td>
+      </tr>
+      <tr>
+        <td>0x8042</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8043</td>
+        <td>YES</td>
+        <td>Value becomes [0x8042]-1</td>
+      </tr>
+      <tr>
+        <td>0x8044</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8045</td>
+        <td>YES</td>
+        <td>Value becomes [0x8044]*-1</td>
+      </tr>
+      <tr>
+        <td>0x8046</td>
+        <td>NO</td>
+        <td>Value becomes value|0x8000</td>
+      </tr>
+      <tr>
+        <td>0x8047</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8048</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x8047] is pushed to stack A</td>
+      </tr>
+      <tr>
+        <td>0x8049</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804A</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x8049] becomes the value popped off stack A</td>
+      </tr>
+      <tr>
+        <td>0x804B</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804C</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x804B]|0x8000 is pushed to stack B</td>
+      </tr>
+      <tr>
+        <td>0x804D</td>
+        <td>NO</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x804E</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here,<br/>[0x804D] becomes the value popped off stack B</td>
+      </tr>
+      <tr>
+        <td>0x804F</td>
+        <td>YES</td>
+        <td>Returns a random value when read</td>
+      </tr>
+      <tr>
+        <td>0x8050</td>
+        <td>YES</td>
+        <td>Normal slot</td>
+      </tr>
+      <tr>
+        <td>0x8051</td>
+        <td>YES</td>
+        <td>Value becomes the value in [[0x8050]]</td>
+      </tr>
+      <tr>
+        <td>0x8051</td>
+        <td>YES</td>
+        <td>Value becomes the value in [[0x8050]]</td>
+      </tr>
+      <tr>
+        <td>0x8052-0x807E</td>
+        <td>YES</td>
+        <td>Unassigned</td>
+      </tr>
+      <tr>
+        <td>0x807F</td>
+        <td>YES</td>
+        <td>If a non-zero value is attempted to be moved here, all writable memory is set to 0</td>
+      </tr>
+    </table>
+  </body>
+</html>

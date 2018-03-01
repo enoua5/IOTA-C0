@@ -1,0 +1,527 @@
+#!/usr/bin/env python
+import getopt, sys
+import re
+
+class Utils:
+    @staticmethod
+    def splitShort(n):
+        return [(n>>8)%256, n%256]
+    @staticmethod
+    def toAddress(n):
+        if str(n)[0]=='&':
+            return n
+        return n|0x8000
+    @staticmethod
+    def clean(prg):
+        #remove whitespace 
+        prg=re.sub(r'^\s+', '', prg, flags=re.MULTILINE)
+        prg=re.sub(r'\s+$', '', prg, flags=re.MULTILINE)
+        #remove comments
+        prg=re.sub(r'#.*$', '', prg, flags=re.MULTILINE)
+        #remove empty lines
+        prg=re.sub(r'\n$', '', prg, flags=re.MULTILINE)
+        return prg
+    @staticmethod
+    def splitCmd(prg):
+        #split into an array of commands
+        prg=prg.split('\n')
+        #get rid of stray blanks
+        prg=list(filter(lambda s: s!="", prg))
+        return prg
+    @staticmethod
+    def parse(prg):
+        #split the commands into commands and args
+        prg=list(map(lambda s: re.split(r'\s+', s), prg))
+        #make into more workable objects
+        prg=list(map(lambda a: {
+            "cmd": a[0],
+            "arg": a[1:]
+        }, prg))
+        
+        #parse numbers
+        for l in prg:
+            #check if the command is a postprocessor instruction
+            if l["cmd"][0]=='.':
+                continue
+            
+            #seperate asterisk
+            l["arg"]=list(map(lambda s: {
+                "pointer": s[0]=='*',
+                "number": s[1:] if (s[0]=='*') else s
+            }, l["arg"]))
+            
+            #parse int
+            def parseint(s):
+                #check if the number is a postprocessor target
+                if s["number"][0]=='&':
+                    return s
+                
+                radixes=[
+                    {"regex": re.compile(r'^0[Bb][0-1]+$'), "radix": 2},
+                    {"regex": re.compile(r'^0[0-7]+$'), "radix": 8},
+                    {"regex": re.compile(r'^0$|^[1-9]\d*$'), "radix": 10},
+                    {"regex": re.compile(r'^0[Xx][0-9a-fA-F]+$'), "radix": 16},
+                ]
+                radix=-1
+                for r in radixes:
+                    radix=r["radix"] if (r["regex"].match(s["number"])) else radix
+                if radix<0:
+                    raise SyntaxError("Invalid Number Error: "+str(s.number))
+                return {
+                    "pointer": s["pointer"],
+                    "number": int(s["number"], radix)%0x10000
+                }
+            l["arg"]=list(map(parseint, l["arg"]))
+            
+            #take into consideration the asterisk
+            l["arg"]=list(map(lambda n: n["number"] if str(n["number"])[0]=='&' else (n["number"]|0x8000 if n["pointer"] else n["number"]), l["arg"]))
+        
+        return prg
+        
+class Functions:
+    @staticmethod
+    def preprocess(prg):
+        prg=Utils.clean(prg)
+        
+        varFinder=re.compile(r'\.var\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\[([1-9][0-9]*)\])?$', flags=re.MULTILINE)
+        constFinder=re.compile(r'^\.const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(.*)$', flags=re.MULTILINE)
+        
+        consts=[]
+        
+        #find all vars
+        pointer=0xFFFF
+        found=varFinder.findall(prg)
+        for match in found:
+            name=match[0]
+            if match[1]:
+                #this is an array
+                number=int(match[1])
+                for i in range(number-1, -1, -1):
+                    consts.append({
+                        "name": name+'['+str(i)+']',
+                        "value": '*'+str(pointer)
+                    })
+                    pointer-=1
+                #the address of the array
+                consts.append({
+                    "name": name,
+                    "value": pointer+1-0x8000
+                })
+            else:
+                consts.append({
+                    "name": name,
+                    "value": '*'+str(pointer)
+                })
+                pointer-=1
+        
+        #find all consts
+        found=constFinder.findall(prg)
+        for match in found:
+            name=match[0]
+            consts.append({
+                "name": name,
+                "value": match[1]
+            })
+        
+        #remove all declarations
+        prg=varFinder.sub('', prg)
+        prg=constFinder.sub('', prg)
+        
+        #replace all references
+        for i in consts:
+            finder=re.compile("(?:"+re.escape(":"+i["name"])+")(\\s+|$)", flags=re.MULTILINE)
+            prg=finder.sub(str(i["value"])+r'\1', prg)
+        
+        return Utils.clean(prg)
+    @staticmethod
+    def compile(asm):
+        asm=Utils.splitCmd(asm)
+        asm=Utils.parse(asm)
+        
+        prg=""
+        for l in asm:
+            #check if the command is a postprocessor instruction
+            if  l["cmd"][0]=='.':
+                prg+=l["cmd"]+" "+(' '.join(l["arg"]))+"\n"
+                continue
+                
+            arg=l["arg"]
+            c=l["cmd"].upper()
+            if c=="NOP":
+                prg+="0\n0\n"
+            elif c=="MOV":
+                arg[0]=Utils.toAddress(arg[0])
+                prg+=str(arg[0])+"\n"+str(arg[1])+"\n"
+            elif c=="JMP":
+                prg+="32838\n"+str(arg[0])+'\n';
+                prg+="32768\n32838\n"
+            elif c=="JMP":
+                prg+="32838\n"+str(arg[0])+'\n'
+                prg+="32768\n32838\n"
+            elif c=="QJP":
+                arg[0]=Utils.toAddress(arg[0])
+                prg+="32768\n"+str(arg[0])+'\n'
+            elif c=="SET":
+                prg+="32769\n"+str(arg[0])+'\n'
+                prg+="32770\n"+str(arg[1])+'\n'
+            elif c=="STA":
+                prg+="32769\n"+str(arg[0])+'\n'
+            elif c=="STV":
+                prg+="32770\n"+str(arg[0])+'\n'
+            elif c=="TNA":
+                prg+="32771\n"+str(arg[0])+'\n'
+                prg+="32772\n"+str(arg[1])+'\n'
+                prg+="32773\n"+str(arg[2])+'\n'
+                if(len(arg)>=4):
+                    arg[3]=Utils.toAddress(arg[3])
+                    prg+=str(arg[3])+'\n'+"32774\n"
+            elif c=="TRN":
+                prg+="32775\n"+str(arg[0])+'\n'
+                prg+="32776\n"+str(arg[1])+'\n'
+                prg+="32777\n"+str(arg[2])+'\n'
+                if(len(arg)>=4):
+                    arg[3]=Utils.toAddress(arg[3])
+                    prg+=str(arg[3])+'\n'+"32778\n"
+            elif c=="AND":
+                prg+="32779\n"+str(arg[0])+'\n'
+                prg+="32780\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32781\n"
+            elif c=="ORR":
+                prg+="32782\n"+str(arg[0])+'\n'
+                prg+="32783\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32784\n"
+            elif c=="XOR":
+                prg+="32785\n"+str(arg[0])+'\n'
+                prg+="32786\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32787\n"
+            elif c=="NOT":
+                prg+="32788\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32789\n"
+            elif c=="LST":
+                prg+="32790\n"+str(arg[0])+'\n'
+                prg+="32791\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32792\n"
+            elif c=="LOE":
+                prg+="32793\n"+str(arg[0])+'\n'
+                prg+="32794\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32795\n"
+            elif c=="GRT":
+                prg+="32796\n"+str(arg[0])+'\n'
+                prg+="32797\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32798\n"
+            elif c=="GOE":
+                prg+="32799\n"+str(arg[0])+'\n'
+                prg+="32800\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32801\n"
+            elif c=="EQU":
+                prg+="32802\n"+str(arg[0])+'\n'
+                prg+="32803\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32804\n"
+            elif c=="NEQ":
+                prg+="32805\n"+str(arg[0])+'\n'
+                prg+="32806\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32807\n"
+            elif c=="SHR":
+                prg+="32808\n"+str(arg[0])+'\n'
+                prg+="32809\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32810\n"
+            elif c=="ASR":
+                prg+="32811\n"+str(arg[0])+'\n'
+                prg+="32812\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32813\n"
+            elif c=="SHL":
+                prg+="32814\n"+str(arg[0])+'\n'
+                prg+="32815\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32816\n"
+            elif c=="ADD":
+                prg+="32817\n"+str(arg[0])+'\n'
+                prg+="32818\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32819\n"
+            elif c=="SUB":
+                prg+="32820\n"+str(arg[0])+'\n'
+                prg+="32821\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32822\n"
+            elif c=="MUL":
+                prg+="32823\n"+str(arg[0])+'\n'
+                prg+="32824\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32825\n"
+            elif c=="DIV":
+                prg+="32826\n"+str(arg[0])+'\n'
+                prg+="32827\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32828\n"
+            elif c=="MOD":
+                prg+="32829\n"+str(arg[0])+'\n'
+                prg+="32830\n"+str(arg[1])+'\n'
+                if(len(arg)>=3):
+                    arg[2]=Utils.toAddress(arg[2])
+                    prg+=str(arg[2])+'\n'+"32831\n"
+            elif c=="INC":
+                prg+="32832\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32833\n"
+            elif c=="DEC":
+                prg+="32834\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32835\n"
+            elif c=="NEG":
+                prg+="32836\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32837\n"
+            elif c=="ADR":
+                prg+="32838\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32838\n"
+            elif c=="PSH":
+                prg+="32839\n"+str(arg[0])+'\n'
+                prg+="32840\n1\n"
+            elif c=="POP":
+                prg+="32842\n1\n"
+                if(len(arg)>=1):
+                    arg[0]=Utils.toAddress(arg[0])
+                    prg+=str(arg[0])+'\n'+"32841\n"
+            elif c=="PSA":
+                prg+="32843\n"+str(arg[0])+'\n'
+                prg+="32844\n1\n"
+            elif c=="POA":
+                prg+="32846\n1\n"
+                if(len(arg)>=1):
+                    arg[0]=Utils.toAddress(arg[0])
+                    prg+=str(arg[0])+'\n'+"32845\n"
+            elif c=="RND":
+                arg[0]=Utils.toAddress(arg[0])
+                prg+=str(arg[0])+'\n'+"32847\n"
+            elif c=="GET":
+                arg[0]=Utils.toAddress(arg[0])
+                prg+="32848\n"+str(arg[0])+'\n'
+                if(len(arg)>=2):
+                    arg[1]=Utils.toAddress(arg[1])
+                    prg+=str(arg[1])+'\n'+"32849\n"
+            elif c=="LBL":
+                arg[0]=Utils.toAddress(arg[0])
+                prg+=str(arg[0])+'\n'+"32768\n"
+            elif c=="CAL":
+                prg+="32817\n8\n"
+                prg+="32818\n32768\n"
+                prg+="32843\n32819\n"
+                prg+="32844\n1\n"
+                prg+="32838\n"+str(arg[0])+'\n'
+                prg+="32768\n32838\n"
+            elif c=="RET":
+                prg+="32846\n1\n"
+                prg+="32768\n32845\n"
+            elif c=="HLT":
+                prg+="32895\n1\n"
+            else:
+                raise SyntaxError("Unrecognized Symbol: "+l.cmd)
+        
+        return prg
+    @staticmethod
+    def postprocess(prg):
+        prg=prg.split('\n')
+        
+        #get the useful info from all postprocessor instructions
+        skip=re.compile(r"^$|^\.")
+        labels=[]
+        p=0x0100
+        for l in prg:
+            if not(skip.match(l)):
+                p+=1
+            if(len(l)==0):
+                continue
+            if l[0]=='.':
+                cmd=re.search(r"^\.([^\s]*)", l).group(1).lower()
+                arg=re.split(r"\s+", re.search(r"^\.[^\s]*\s+(.*)$", l).group(1))
+                if cmd=="lbl":
+                    labels.append({
+                        "name": arg[0],
+                        "loc": p
+                    })
+                else:
+                    raise SyntaxError("Unrecognized Symbol: "+cmd)
+        #remove all postprocessor instructions
+        prg=list(filter(lambda l: len(l)!=0 and l[0]!=".", prg))
+        prg="\n".join(prg)
+        
+        for i in labels:
+            finder=re.compile("(?:"+re.escape("&"+i["name"])+")(\\s+|$)", flags=re.MULTILINE)
+            prg=finder.sub(str(i["loc"])+r'\1', prg)
+        
+        return prg
+    @staticmethod
+    def load(prg):
+        prg=prg.split('\n')
+        nums=list(filter(lambda n: n.isdigit(), prg))
+        nums=list(map(int, nums))
+        
+        prg=[]
+        for i in range(0x8000):
+            prg+=Utils.splitShort(i)
+        prg+=Utils.splitShort(0x8100)
+        prg+=Utils.splitShort(0x807F)
+        for i in range(0x8002, 0x8100):
+            prg+=Utils.splitShort(0)
+        for i in nums:
+            prg+=Utils.splitShort(i)
+        for i in range(0x10000-(len(prg)/2)):
+            prg+=Utils.splitShort(0)
+        
+        return bytearray(prg)
+     
+def showHelp(programName, returnCode):
+    print("Usage: %s [OPTION]... [FILE]" % programName)
+    print("Compiles a program for the IOTA-C0")
+    print("")
+    print("  -o <file>    write the compiled program to <file>")
+    print("  -s <form>    input file is in <form>")
+    print("  -e <form>    compile into <form>")
+    print("  -h           display this help and exit")
+    print("")
+    print("<form> can be the id or name of any of these forms:")
+    print("  |id   |name    |file extension")
+    print("  |-----+--------+--------------")
+    print("  |0    |preasm  |.pre.asm      ")
+    print("  |1    |asm     |.asm          ")
+    print("  |2    |prenum  |.pre.csv      ")
+    print("  |3    |num     |.csv          ")
+    print("  |4    |mem     |.c0           ")
+    sys.exit(returnCode) 
+def main():
+    #init vars
+    startForm=0
+    endForm=4
+    
+    outFileName=""
+    inFileName=""
+    outFileSpecified=False
+    
+    #parse args
+    forms=["preasm", "asm", "prenum", "num", "mem"]
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "s:e:o:h")
+    except getopt.GetoptError as err:
+        print(err)
+        print("Try '%s -h' for more information" % sys.argv[0])
+        sys.exit(-1)
+    for o, a in opts:
+        if o == "-s":
+            if a.isdigit():
+                startForm=int(a)
+                continue
+            i=0
+            while i<5:
+                if a==forms[i]:
+                    break
+                i+=1
+            startForm=i
+        elif o == "-e":
+            if a.isdigit():
+                endForm=int(a)
+                continue
+            i=0
+            while i<5:
+                if a==forms[i]:
+                    break
+                i+=1
+            endForm=i
+        elif o == "-o":
+            outFileName=a
+            outFileSpecified=True
+        else:
+            showHelp(sys.argv[0], 0)
+    
+    #sanity checks
+    if len(args)!=1:
+        showHelp(sys.argv[0], -1)
+    if startForm<0 or endForm<0 or startForm>4 or endForm>4:
+        showHelp(sys.argv[0], -1)
+    if startForm>=endForm:
+        print("Cannot compile backwards.")
+        print("Try '%s -h' for more information" % sys.argv[0])
+        sys.exit(-1)
+    
+    #more preps
+    inFileName=args[0]
+    if not(outFileSpecified):
+        extens=[".pre.asm", ".asm", ".pre.csv", ".csv", ".c0"]
+        exten=extens[endForm]
+        outFileName=inFileName.split('.')[0]+exten
+        
+    try:
+        inFile=open(inFileName, 'r')
+        prg=inFile.read()
+        inFile.close()
+    except IOError:
+        print("Could not read file '%s'" % inFileName)
+        sys.exit(-1)
+    
+    for i in range(startForm, endForm):
+        if i==0:
+            print("preprocessing...")
+            prg=Functions.preprocess(prg)
+        if i==1:
+            print("compiling...")
+            prg=Functions.compile(prg)
+        if i==2:
+            print("postprocessing...")
+            prg=Functions.postprocess(prg)
+        if i==3:
+            print("loading...")
+            prg=Functions.load(prg)
+
+    if endForm!=4:
+        try:
+            outFile=open(outFileName, 'w')
+            outFile.write(prg)
+            outFile.close()
+        except IOError:
+            print("Could not write to file '%s'" % outFileName)
+            sys.exit(-1)
+    else:
+        try:
+            outFile=open(outFileName, 'wb')
+            outFile.write(prg)
+            outFile.close()
+        except IOError:
+            print("Could not write to file '%s'" % outFileName)
+            sys.exit(-1)
+
+if __name__ == "__main__":
+    main()

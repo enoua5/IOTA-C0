@@ -1,0 +1,36 @@
+Preprocessor:
+  A preprocessor instruction begins with a . character on its own line.
+  .const name value
+    Name follows c variable name rules
+    Will replace all instances of :name with value.
+  .var name[optional number]
+    Compiles into .const declarations.
+    
+    Optional number is a base 10 number greater than 0.
+    
+    The first .var will be given a pointerValue of 0xFFFF.
+    
+    If there is no brackets after the name, the pointer value is reduced by one
+    after the compilation into a .const.
+    
+    If there is brackets, the pointer value is reduced by the number in the
+    brackets after the compilation into a .const.
+    There will also be defined a const of the name of the array pointing to
+    address 0.
+    
+    Example of how the instructions will compile:
+      This:
+        .var variable
+        .var array[3]
+      Becomes this:
+        .const variable 0xFFFF
+        .const array[2] 0xFFFE
+        .const array[1] 0xFFFD
+        .const array[0] 0xFFFC
+        .const array 0x7FFC
+
+Postprocessor:
+  A postprocessor instruction begins with a . character on its own line.
+  All postprocessor instructions and targets are ignored by the compiler.
+  .lbl name
+    Will replace all instances of &name with the address of the next instruction

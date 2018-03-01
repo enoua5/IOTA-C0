@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>IOTA-C0 Assembly Documentaion</title>
+    <link rel="stylesheet" type="text/css" href="assets/style.css">
+    <link rel="icon" href="assets/icon.ico">
+  </head>
+  <body>
+    <h1>IOTA-C0 Assembly Documentation</h1>
+    <h2>Preprocessor</h2>
+    <p>
+      A preprocessot instruction begins with a <code>.</code> character on its own line. The dot is followed by the command, then arguments seperated by spaces.
+    </p>
+    <h3>Commands</h3>
+    <table>
+      <tr>
+        <th>Command</th>
+        <th>Arguments</th>
+        <th>Description</th>
+        <th>Technical</th>
+      </tr>
+      <tr>
+        <td>.const</td>
+        <td>name value</td>
+        <td>Creates a constant that can be called by prepending <code>:</code> to the front of the name.</td>
+        <td>
+          <ul>
+            <li><code>name</code> follows C variable naming rules.</li>
+            <li>Will replace all instances of <code>:name</code> with <code>value</code>.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td>.var</td>
+        <td>name</td>
+        <td>Declares a varible that can be called by prepending <code>:</code> to the front of the name.</td>
+        <td>
+          <ul>
+            <li>Compiles into a .const declaration</li>
+            <li>The first .var will be given a <code>value</code> of 0xFFFF when compiled into a .const</li>
+            <li>Each successive .var will be given a value one less than the last.</li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td>.var</td>
+        <td>name[number]</td>
+        <td>Declares an array that can be called by prepending <code>:</code> to the front of the name and appending an index in brackets.</td>
+        <td>
+          <ul>
+            <li>Compiles into .var declarations and a .const declaration</li>
+            <li><code>number</code> is a positive integer in base 10.</li>
+            <li>Compiles into <code>number</code> .var declarations, with names from <code>name[0]</code> to <code>name[number-1]</code>, and a .const declaration with a value 0x8000 less than <code>name[0]</code></li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+    <h3>Preprocessor Example</h3>
+    <p>If we start with the following code;</p>
+    <code>
+      .var variable<br/>
+      .var array[3]<br/>
+      .const constant1 10<br/>
+      .const constant2 42<br/>
+      ADD :constant1 :constant2 :array[1]<br/>
+      ADD :array[1] :array :variable
+    </code>
+    <p>First, vars will be compiled into consts to get this;</p>
+    <code>
+      .const variable 0xFFFF<br/>
+      .const array[2] 0xFFFE<br/>
+      .const array[1] 0xFFFD<br/>
+      .const array[0] 0xFFFC<br/>
+      .const array 0x7FFC<br/>
+      .const constant1 10<br/>
+      .const constant2 42<br/>
+      ADD :constant1 :constant2 :array[1]<br/>
+      ADD :array[1] :array :variable
+    </code>
+    <p>Then, the consts will be pasted into the code to get this;</p>
+    <code>
+      ADD 10 42 0xFFFF<br/>
+      ADD 0xFFFE 0x7FFC 0xFFFF
+    </code>
+    
+    <h2>Assembly</h2>
+    <ul>
+      <li>One command per line</li>
+      <li><code>#</code> denotes a comment</li>
+      <li>Any amount of whitespace can go before or after a command</li>
+      <li>One of more white space characters (excluding new line) can go between arguments</li>
+      <li>Arguments can be any dec, hex, octal, or binary number from 0x000-0xFFFF</li>
+      <li>dec is written as just a number (eg 42)</li>
+      <li>hex is written as 0x and a number (eg 0x2A)</li>
+      <li>octal is written as 0 and a number (eg 052)</li>
+      <li>binary is written as a 0b and a number (eg 0b101010)</li>
+      <li>* can be put before a number to to work as an address (eg *0x10 becomes 0x8010 when compiled)</li>
+    </ul>
+    
+    <p>
+      In this table:
+    </p>
+    <ul>
+      <li>An argument prepended with <code>:</code> will default to being prepended with <code>*</code>, even if this is not put there in the program. This cannot be turned off.</li>
+      <li>An argument in brackets means that it is optional. A section of compilation in brackets means that it will only be present if the optional argument is present</li>
+    </ul>
+    <table>
+      <tr>
+        <th>Command</th>
+        <th>Arguments</th>
+        <th>Mnemonic</th>
+        <th>Description</th>
+        <th>Compiles into</th>
+      </tr>
+      <tr>
+        <td>NOP</td>
+        <td>None</td>
+        <td>No Operation</td>
+        <td>Does nothing</td>
+        <td>
+          0000 0000
+        </td>
+      </tr>
+      <tr>
+        <td>MOV</td>
+        <td>:N M</td>
+        <td>Move</td>
+        <td>Copy M into address N</td>
+        <td>
+          NNNN MMMM
+        </td>
+      </tr>
+      <tr>
+        <td>JMP</td>
+        <td>N</td>
+        <td>Jump</td>
+        <td>Jump execution to address N</td>
+        <td>
+          8046 NNNN
+          8000 8046
+        </td>
+      </tr>
+      <tr>
+        <td>QJP</td>
+        <td>:N</td>
+        <td>Quick Jump (Can't take literals)</td>
+        <td>Jump execution to the address in address N</td>
+        <td>
+          8000 NNNN
+        </td>
+      </tr>
+      <tr>
+        <td>SET</td>
+        <td>N M</td>
+        <td>Set</td>
+        <td>Set the value in memory address N to M</td>
+        <td>
+          8001 NNNN
+          8002 MMMM
+        </td>
+      </tr>
+      <tr>
+        <td>STA</td>
+        <td>N</td>
+        <td>Set Address</td>
+        <td>Like SET, but without changing the value currently being used</td>
+        <td>
+          8001 NNNN
+        </td>
+      </tr>
+      <tr>
+        <td>STV</td>
+        <td>N</td>
+        <td>Set Value</td>
+        <td>Like SET, but without changing the address currently being used</td>
+        <td>
+          8002 NNNN
+        </td>
+      </tr>
+      <tr>
+        <td>TNA</td>
+        <td>N M L [:K]</td>
+        <td>Ternary Address</td>
+        <td>If N is nonzero, set the value in memory address K to :M; else set it to :L</td>
+        <td>
+          8003 NNNN
+          8004 MMMM
+          8005 LLLL
+         [KKKK 8006]
+        </td>
+      </tr>
+      <tr>
+        <td>TRN</td>
+        <td>N M L [:K]</td>
+        <td>Ternary</td>
+        <td>If N is nonzero, set the value in memory address K to M; else set it to L</td>
+        <td>
+          8007 NNNN
+          8008 MMMM
+          8009 LLLL
+         [KKKK 800A]
+        </td>
+      </tr>
+      <tr>
+        <td>AND</td>
+        <td>N M [:L]</td>
+        <td>And</td>
+        <td>Write the result of the bitwise-and operation between N and M to memory address L</td>
+        <td>
+          800B NNNN
+          800C MMMM
+         [LLLL 800D]
+        </td>
+      </tr>
+      <tr>
+        <td>ORR</td>
+        <td>N M [:L]</td>
+        <td>Or</td>
+        <td>Write the result of the bitwise-or operation between N and M to memory address L</td>
+        <td>
+          800E NNNN
+          800F MMMM
+         [LLLL 8010]
+        </td>
+      </tr>
+      <tr>
+        <td>XOR</td>
+        <td>N M [:L]</td>
+        <td>Exclusive Or</td>
+        <td>Write the result of the bitwise-xor operation between N and M to memory address L</td>
+        <td>
+          8011 NNNN
+          8012 MMMM
+         [LLLL 8013]
+        </td>
+      </tr>
+      <tr>
+        <td>NOT</td>
+        <td>N [:M]</td>
+        <td>Not</td>
+        <td>Write the result of the bitwise-not operation of N to memory address M</td>
+        <td>
+          8014 NNNN
+         [MMMM 8015]
+        </td>
+      </tr>
+      <tr>
+        <td>LST</td>
+        <td>N M [:L]</td>
+        <td>Less Than</td>
+        <td>If M is less than M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          8016 NNNN
+          8017 MMMM
+         [LLLL 8018]
+        </td>
+      </tr>
+      <tr>
+        <td>LOE</td>
+        <td>N M [:L]</td>
+        <td>Less Than or Equal</td>
+        <td>If M is less than or equal to M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          8019 NNNN
+          801A MMMM
+         [LLLL 801B]
+        </td>
+      </tr>
+      <tr>
+        <td>GRT</td>
+        <td>N M [:L]</td>
+        <td>Greater Than</td>
+        <td>If M is greater than M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          801C NNNN
+          801D MMMM
+         [LLLL 801E]
+        </td>
+      </tr>
+      <tr>
+        <td>GOE</td>
+        <td>N M [:L]</td>
+        <td>Greater Than or Equal</td>
+        <td>If M is greater than or equal to M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          801F NNNN
+          8020 MMMM
+         [LLLL 8021]
+        </td>
+      </tr>
+      <tr>
+        <td>EQU</td>
+        <td>N M [:L]</td>
+        <td>Equal</td>
+        <td>If M is equal to M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          8022 NNNN
+          8023 MMMM
+         [LLLL 8024]
+        </td>
+      </tr>
+      <tr>
+        <td>NEQ</td>
+        <td>N M [:L]</td>
+        <td>Not Equal</td>
+        <td>If M is not equal to M, set the value in memory address L to 0xFFFF; else set it to 0</td>
+        <td>
+          8025 NNNN
+          8026 MMMM
+         [LLLL 8027]
+        </td>
+      </tr>
+      <tr>
+        <td>SHR</td>
+        <td>N M [:L]</td>
+        <td>Shift Right</td>
+        <td>Shifts N right by M bits and saves the value in memory address L</td>
+        <td>
+          8028 NNNN
+          8029 MMMM
+         [LLLL 802A]
+        </td>
+      </tr>
+      <tr>
+        <td>ASR</td>
+        <td>N M [:L]</td>
+        <td>Arithmatic Shift Right</td>
+        <td>Shifts N right by M bits arithmatically and saves the value in memory address L</td>
+        <td>
+          802B NNNN
+          802C MMMM
+         [LLLL 802D]
+        </td>
+      </tr>
+      <tr>
+        <td>SHL</td>
+        <td>N M [:L]</td>
+        <td>Shift Left</td>
+        <td>Shifts N left by M bits and saves the value in memory address L</td>
+        <td>
+          802E NNNN
+          802F MMMM
+         [LLLL 8030]
+        </td>
+      </tr>
+      <tr>
+        <td>ADD</td>
+        <td>N M [:L]</td>
+        <td>Add</td>
+        <td>Add N and M, saving the result in memory address L</td>
+        <td>
+          8031 NNNN
+          8032 MMMM
+         [LLLL 8033]
+        </td>
+      </tr>
+      <tr>
+        <td>SUB</td>
+        <td>N M [:L]</td>
+        <td>Subtract</td>
+        <td>Subtract M form N, saving the result in memory address L</td>
+        <td>
+          8034 NNNN
+          8035 MMMM
+         [LLLL 8036]
+        </td>
+      </tr>
+      <tr>
+        <td>MUL</td>
+        <td>N M [:L]</td>
+        <td>Multiply</td>
+        <td>Multiply N by M, saving the result in memory address L</td>
+        <td>
+          8037 NNNN
+          8038 MMMM
+         [LLLL 8039]
+        </td>
+      </tr>
+      <tr>
+        <td>DIV</td>
+        <td>N M [:L]</td>
+        <td>Divide</td>
+        <td>Divide N by M, saving the result in memory address L. Division by zero results in a 0.</td>
+        <td>
+          803A NNNN
+          803B MMMM
+         [LLLL 803C]
+        </td>
+      </tr>
+      <tr>
+        <td>MOD</td>
+        <td>N M [:L]</td>
+        <td>Modulo</td>
+        <td>Divide N by M, saving the remainder of result in memory address L. Modulo by zero results in a 0.</td>
+        <td>
+          803D NNNN
+          803E MMMM
+         [LLLL 803F]
+        </td>
+      </tr>
+      <tr>
+        <td>INC</td>
+        <td>N [:M]</td>
+        <td>Increment</td>
+        <td>Add 1 to N, saving the result in memory address M</td>
+        <td>
+          8040 NNNN
+         [MMMM 8041]
+        </td>
+      </tr>
+      <tr>
+        <td>DEC</td>
+        <td>N [:M]</td>
+        <td>Decrement</td>
+        <td>Subtract 1 from N, saving the result in memory address M</td>
+        <td>
+          8042 NNNN
+         [MMMM 8043]
+        </td>
+      </tr>
+      <tr>
+        <td>NEG</td>
+        <td>N [:M]</td>
+        <td>Negative</td>
+        <td>Multiply N by -1 (i.e. 0xFFFF), saving the result in memory address M</td>
+        <td>
+          8044 NNNN
+         [MMMM 8045]
+        </td>
+      </tr>
+      <tr>
+        <td>ADR</td>
+        <td>N [:M]</td>
+        <td>Address</td>
+        <td>Use bitwise-or with N and 0x8000 (i.e. make a litteral into an pointer), saving the result in memory address M</td>
+        <td>
+          8046 NNNN
+         [MMMM 8046]
+        </td>
+      </tr>
+      <tr>
+        <td>PSH</td>
+        <td>N</td>
+        <td>Push</td>
+        <td>Push the value N onto stack A</td>
+        <td>
+          8047 NNNN
+          8048 0001
+        </td>
+      </tr>
+      <tr>
+        <td>POP</td>
+        <td>[:N]</td>
+        <td>Pop</td>
+        <td>Pop a value off of stack A and save it in memory address N</td>
+        <td>
+          804A 0001
+         [NNNN 8049]
+        </td>
+      </tr>
+      <tr>
+        <td>PSA</td>
+        <td>N</td>
+        <td>Push Address</td>
+        <td>Use bitwise-or with N and 0x8000 (i.e. make a litteral into an pointer), and push the result onto stack B (the call-stack)</td>
+        <td>
+          804B NNNN
+          804C 0001
+        </td>
+      </tr>
+      <tr>
+        <td>POA</td>
+        <td>[:N]</td>
+        <td>Pop Address</td>
+        <td>Pop a value off of stack B (the call-stack), and the it in memory address N</td>
+        <td>
+          804E 0001
+         [NNNN 804D]
+        </td>
+      </tr>
+      <tr>
+        <td>RND</td>
+        <td>:N</td>
+        <td>Random</td>
+        <td>Get a random number and save it in memory address N</td>
+        <td>
+          NNNN 804F
+        </td>
+      </tr>
+      <tr>
+        <td>GET</td>
+        <td>:N [:M]</td>
+        <td>Get</td>
+        <td>Copy the value pointed to by the value in memory address N and copy it into memory address M</td>
+        <td>
+          8050 NNNN
+         [MMMM 8051]
+        </td>
+      </tr>
+      <tr>
+        <td>LBL</td>
+        <td>:N</td>
+        <td>Label</td>
+        <td>Save the address of the next command in memory address N</td>
+        <td>
+          NNNN 8000
+        </td>
+      </tr>
+      <tr>
+        <td>CAL</td>
+        <td>N</td>
+        <td>Call</td>
+        <td>Jump execution to memory address N, pushing the memory address of the next command onto stack B (the call-stack)</td>
+        <td>
+          8031 0008
+          8032 8000
+          804B 8033
+          804C 0001
+          8046 NNNN
+          8000 8046
+        </td>
+      </tr>
+      <tr>
+        <td>RET</td>
+        <td>None</td>
+        <td>Return</td>
+        <td>Pop a pointer off stack B (the call-stack) and jump exectuation to it.</td>
+        <td>
+          804E 0001
+          8000 804D
+        </td>
+      </tr>
+      <tr>
+        <td>HLT</td>
+        <td>None</td>
+        <td>Halt</td>
+        <td>Set all writable RAM to 0, stopping execution.</td>
+        <td>
+          807F 0001
+        </td>
+      </tr>
+    </table>
+    
+    <h2>Postprocessor</h2>
+    <p>
+      A postprocessor instruction begins with a . character on its own line.<br/>
+      All postprocessor instructions and targets are ignored by the assembler.
+    </p>
+    <table>
+      <tr>
+        <th>Command</th>
+        <th>Arguments</th>
+        <th>Description</th>
+        <th>Technical</th>
+      </tr>
+      <tr>
+        <td>.lbl</td>
+        <td>name</td>
+        <td>Will create a label which can be jumped to by the JMP command.</td>
+        <td>Will replace all instances of <code>&name</code> with the address of the next instruction in memory</td>
+      </tr>
+    </table>
+    
+  </body>
+</html>

@@ -1,0 +1,173 @@
+N, M, L, K represent any dec, hex, octal, or binary number from 0x000-0xFFFF
+dec is written as just a number (eg 42)
+hex is written as 0x and a number (eg 0x2A)
+octal is written as 0 and a number (eg 052)
+binary is written as a 0b and a number (eg 0b101010)
+* can be put before a number to to work as an address (eg *0x10 becomes 0x8010 when compiled)
+
+One command per line
+# denotes a comment
+Any amount of whitespace can go before or after a command
+One of more white space characters (excluding \n) can go between arguments
+
+
+IN THIS DOCUMENT:
+  : means that the number will be replaced with itself|0x8000
+    An argument with this will not be affected by *
+
+  An argument or output in [] means it is optional
+
+  {text} specifies the meaning of the symbol
+
+NOP {No Operation}
+  0000 0000
+MOV :N M
+  NNNN MMMM
+JMP N {Jump}
+  8046 NNNN
+  8000 8046
+QJP :N {Quick Jump (Can't take literals)}
+  8000 NNNN
+
+SET N M {Set}
+  8001 NNNN
+  8002 MMMM
+STA N {Set Address}
+  8001 NNNN
+STV N {Set Value}
+  8002 NNNN
+
+TNA N M L [:K] {Ternary Address}
+  8003 NNNN
+  8004 MMMM
+  8005 LLLL
+ [KKKK 8006]
+TRN N M L [:K] {Ternary}
+  8007 NNNN
+  8008 MMMM
+  8009 LLLL
+ [KKKK 800A]
+
+AND N M [:L] {And}
+  800B NNNN
+  800C MMMM
+ [LLLL 800D]
+ORR N M [:L] {Or}
+  800E NNNN
+  800F MMMM
+ [LLLL 8010]
+XOR N M [:L] {Exclusive Or}
+  8011 NNNN
+  8012 MMMM
+ [LLLL 8013]
+NOT N [:M] {Not}
+  8014 NNNN
+ [MMMM 8015]
+
+LST N M [:L] {Less Than}
+  8016 NNNN
+  8017 MMMM
+ [LLLL 8018]
+LOE N M [:L] {Less Than or Equal}
+  8019 NNNN
+  801A MMMM
+ [LLLL 801B]
+GRT N M [:L] {Greater Than}
+  801C NNNN
+  801D MMMM
+ [LLLL 801E]
+GOE N M [:L] {Greater Than or Equal}
+  801F NNNN
+  8020 MMMM
+ [LLLL 8021]
+EQU N M [:L] {Equal}
+  8022 NNNN
+  8023 MMMM
+ [LLLL 8024]
+NEQ N M [:L] {Not Equal}
+  8025 NNNN
+  8026 MMMM
+ [LLLL 8027]
+ 
+SHR N M [:L] {Shift Right}
+  8028 NNNN
+  8029 MMMM
+ [LLLL 802A]
+ASR N M [:L] {Arithmatic Shift Right}
+  802B NNNN
+  802C MMMM
+ [LLLL 802D]
+SHL N M [:L] {Shift Left}
+  802E NNNN
+  802F MMMM
+ [LLLL 8030]
+
+ADD N M [:L] {Add}
+  8031 NNNN
+  8032 MMMM
+ [LLLL 8033]
+SUB N M [:L] {Subtract}
+  8034 NNNN
+  8035 MMMM
+ [LLLL 8036]
+MUL N M [:L] {Multiply}
+  8037 NNNN
+  8038 MMMM
+ [LLLL 8039]
+DIV N M [:L] {Divide}
+  803A NNNN
+  803B MMMM
+ [LLLL 803C]
+MOD N M [:L] {Modulo}
+  803D NNNN
+  803E MMMM
+ [LLLL 803F]
+
+INC N [:M] {Increment}
+  8040 NNNN
+ [MMMM 8041]
+DEC N [:M] {Decrement}
+  8042 NNNN
+ [MMMM 8043]
+NEG N [:M] {Negative}
+  8044 NNNN
+ [MMMM 8045]
+ADR N [:M] {Address}
+  8046 NNNN
+ [MMMM 8046]
+ 
+PSH N {Push}
+  8047 NNNN
+  8048 0001
+POP [:N] {Pop}
+  804A 0001
+ [NNNN 8049]
+PSA N {Push Address}
+  804B NNNN
+  804C 0001
+POA [:N] {Pop Address}
+  804E 0001
+ [NNNN 804D]
+
+RND :N {Random}
+  NNNN 804F
+GET :N [:M] {Get}
+  8050 NNNN
+ [MMMM 8051]
+
+LBL :N {Label}
+  NNNN 8000
+CAL N {Call}
+  8031 0008
+  8032 8000
+  804B 8033
+  804C 0001
+  8046 NNNN
+  8000 8046
+RET {Return}
+  804E 0001
+  8000 804D
+
+HLT {Halt}
+  807F 0001
+  
