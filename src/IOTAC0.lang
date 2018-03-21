@@ -30,15 +30,15 @@
     </context>
 
     <context id="octal" style-ref="integer">
-      <match>0[1-7][0-7]*</match>
+      <match>0[0-7]*</match>
     </context>
 
     <context id="hex" style-ref="integer">
-      <match>0[xX][1-9a-fA-F][0-9a-fA-F]*</match>
+      <match>0[xX][0-9a-fA-F]*</match>
     </context>
 
     <context id="binary" style-ref="integer">
-      <match>0[bB]1[01]*</match>
+      <match>0[bB][01]*</match>
     </context>
 
     <context id="operations" style-ref="operation">
