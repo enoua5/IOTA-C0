@@ -46,3 +46,6 @@ There are three folders in `examples/`, each contains a `.pre.asm` file. Test ou
 A debugger can be found at `/debugger/index.html`. Visit this page in a browser to run it. To use it, paste preassembly code into the first text area and click compile, then click run.
 
 There is an overview of the RAM on the top left of the page, and a list a variables declaced with `.var` on the right.
+
+## GTKSourceView Language File
+A language specification file for GTKSourceView-3.0 syntax highlighting can be found at `src/IOTAC0.lang`.

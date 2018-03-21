@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ This file is an unofficial part of GtkSourceView
+
+ Author: Jacob Allen <enoua5@gmail.com>
+ Copyright (C) 2018 Jacob Allen <enoua5@gmail.com>
+
+-->
+<language id="iotac0" _name="IOTA-C0" version="2.0" _section="Script">
+  <metadata>
+    <property name="globs">*.pre.asm;*.asm</property>
+    <property name="line-comment-start">#</property>
+  </metadata>
+
+  <styles>
+    <style id="preprocessor"      _name="Preprocessor"          map-to="def:preprocessor"/>
+    <style id="postprocessor"     _name="Postprocessor"         map-to="def:preprocessor"/>
+    <style id="integer"           _name="Integer"               map-to="def:base-n-integer"/>
+    <style id="operation"         _name="Operation"             map-to="def:function"/>
+    <style id="variable"          _name="Variable"              map-to="def:identifier"/>
+    <style id="label"             _name="Label"                 map-to="def:constant"/>
+  </styles>
+
+  <definitions>
+    <define-regex id="identifier">[a-zA-Z_][a-zA-Z0-9_]*</define-regex>
+
+    <context id="decimal" style-ref="integer">
+      <match>[1-9][0-9]*|0</match>
+    </context>
+
+    <context id="octal" style-ref="integer">
+      <match>0[1-7][0-7]*</match>
+    </context>
+
+    <context id="hex" style-ref="integer">
+      <match>0[xX][1-9a-fA-F][0-9a-fA-F]*</match>
+    </context>
+
+    <context id="binary" style-ref="integer">
+      <match>0[bB]1[01]*</match>
+    </context>
+
+    <context id="operations" style-ref="operation">
+      <keyword>NOP</keyword>
+      <keyword>MOV</keyword>
+      <keyword>JMP</keyword>
+      <keyword>QJP</keyword>
+      <keyword>SET</keyword>
+      <keyword>STA</keyword>
+      <keyword>STV</keyword>
+      <keyword>TNA</keyword>
+      <keyword>TRN</keyword>
+      <keyword>AND</keyword>
+      <keyword>ORR</keyword>
+      <keyword>XOR</keyword>
+      <keyword>NOT</keyword>
+      <keyword>LST</keyword>
+      <keyword>LOE</keyword>
+      <keyword>GRT</keyword>
+      <keyword>GOE</keyword>
+      <keyword>EQU</keyword>
+      <keyword>NEQ</keyword>
+      <keyword>SHR</keyword>
+      <keyword>ASR</keyword>
+      <keyword>SHL</keyword>
+      <keyword>ADD</keyword>
+      <keyword>SUB</keyword>
+      <keyword>MUL</keyword>
+      <keyword>DIV</keyword>
+      <keyword>MOD</keyword>
+      <keyword>INC</keyword>
+      <keyword>DEC</keyword>
+      <keyword>NEG</keyword>
+      <keyword>ADR</keyword>
+      <keyword>PSH</keyword>
+      <keyword>POP</keyword>
+      <keyword>PSA</keyword>
+      <keyword>POA</keyword>
+      <keyword>RND</keyword>
+      <keyword>GET</keyword>
+      <keyword>LBL</keyword>
+      <keyword>CAL</keyword>
+      <keyword>RET</keyword>
+      <keyword>HLT</keyword>
+    </context>
+
+    <context id="preprocessor" style-ref="preprocessor">
+      <match extended="true">
+        \.
+        (var\s+(\%{identifier})(?:\[([1-9][0-9]*)\])?$)
+       |(const\s+(\%{identifier})\s+(.*)$)
+      </match>
+    </context>
+    <context id="preprocessor_ref" style-ref="variable">
+      <match>\:\%{identifier}</match>
+    </context>
+
+    <context id="postprocessor" style-ref="postprocessor">
+      <match extended="true">
+        \.
+        (lbl\s+(\%{identifier})$)
+      </match>
+    </context>
+    <context id="postprocessor_ref" style-ref="label">
+      <match>\&amp;\%{identifier}</match>
+    </context>
+
+    <context id="iotac0" class="no-spell-check">
+      <include>
+        <context ref="def:shebang"/>
+        <context ref="def:shell-like-comment"/>
+        <context ref="octal"/>
+        <context ref="hex"/>
+        <context ref="binary"/>
+        <context ref="decimal"/>
+        <context ref="operations"/>
+        <context ref="preprocessor"/>
+        <context ref="preprocessor_ref"/>
+        <context ref="postprocessor"/>
+        <context ref="postprocessor_ref"/>
+      </include>
+    </context>
+  </definitions>
+</language>
