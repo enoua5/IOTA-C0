@@ -9,7 +9,7 @@
 -->
 <language id="iotac0" _name="IOTA-C0" version="2.0" _section="Script">
   <metadata>
-    <property name="globs">*.pre.asm;*.asm</property>
+    <property name="globs">*.pre.asm</property>
     <property name="line-comment-start">#</property>
   </metadata>
 
